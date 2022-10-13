@@ -1,0 +1,65 @@
+# This program plots the 2d densities of doses for models with and withou6 interaction term 
+# along with the true MTD curve.
+#tiff(file="Figure1.tiff",width=1600,height=1600,units="px",res=300)
+library(tidyverse)
+library(ggplot2)
+library(cowplot)
+
+M<-2000
+
+NN<-40
+trho00<-0.01
+trho01<-0.6
+trho10<-0.6
+teta<-40
+theta<-0.33333
+########################################################################
+# import the doses of the logisitc model with interaction term
+########################################################################
+x_logist<- read.table("dosex_logist.txt")
+y_logist<- read.table("dosey_logist.txt")
+########################################################################
+# import the doses of the logisitc model with no interaction term
+########################################################################
+x_noint<- read.table("dosex_no-int.txt")
+y_noint<- read.table("dosey_no-int.txt")
+
+# This function finds the MTD curve from logistic model
+
+mtd_logistic<-function(rho00,rho01,rho10,eta,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma+eta*x)
+a}
+
+# Get the x-y coordinates of the true MTD curve
+
+tmtdx0<-(log(theta/(1-theta)) - log(trho00/(1-trho00))) / (log(trho10/(1-trho10)) - log(trho00/(1-trho00)))
+if (tmtdx0 > 1) 
+{x2<-seq(0,1,by=0.01)} else 
+{
+x2<-seq(0,tmtdx0,by=0.01)}
+
+y2<-numeric()
+ll<-length(x2)
+for (i in 1:ll){
+y2[i]<-mtd_logistic(trho00,trho01,trho10,teta,theta,x2[i])}
+
+
+# Get the doses for all trials
+xlogist<-unlist(x_logist)
+ylogist<-unlist(y_logist)
+xnoint<-unlist(x_noint)
+ynoint<-unlist(y_noint)
+
+a<-data.frame(x=xlogist,y=ylogist)
+b<-data.frame(x=xnoint,y=ynoint)
+c<-data.frame(x=x2,y=y2)
+#aa<-ggplot(a,aes(x=x,y=y))+geom_density_2d_filled(contour_var="ndensity",bins=5,alpha=0.75)+labs(x="Dose (Agent A)",y="Dose (Agent B)")+theme_classic()+xlim(0,0.5)+ylim(0,0.5)+geom_line(aes(x=x2,y=y2),size=1,data=c)+theme(legend.position = c(0.8, 0.8),legend.key.size=unit(0.4,'cm'),legend.title = element_text(size=10),legend.text = element_text(size=8))
+#aa
+
+bb<-ggplot(b,aes(x=x,y=y))+geom_density_2d_filled(contour_var="ndensity",bins=5,alpha=0.75)+labs(x="Dose (Agent A)",y="Dose (Agent B)")+theme_classic()+xlim(0,0.5)+ylim(0,0.5)+geom_line(aes(x=x2,y=y2),size=1,data=c)+theme(legend.position = c(0.8, 0.8),legend.key.size=unit(0.4,'cm'),legend.title = element_text(size=10),legend.text = element_text(size=8))
+bb
+#plot_grid(aa,bb,ncol=2,nrow=2)
+

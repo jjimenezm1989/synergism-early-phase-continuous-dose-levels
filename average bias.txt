@@ -1,0 +1,172 @@
+# This program determines the design operating characteristics of EWOC using drug combinations.
+# For a given scenario determined by trho00, trho01, trho10, teta, theta are parameters of the scenario
+# For every estimated MTD from a given trial, and for each point x on the true MTD curve,
+# we cumpute the minimum distance dx from this point to the estimated MTD.
+# We then plot the average distance dx across the m simmulated trials
+
+# import the mcmc estimates of the four model parameters
+tiff(file="Figure1.tiff",width=1600,height=1600,units="px",res=300)
+
+# For the logistic true model
+
+vrho00<- read.table("rho00_logist.txt")
+vrho01<- read.table("rho01_logist.txt")
+vrho10<- read.table("rho10_logist.txt")
+veta<- read.table("eta_logist.txt")
+
+# For the probit True model
+pvrho00<- read.table("rho00_probit.txt")
+pvrho01<- read.table("rho01_probit.txt")
+pvrho10<- read.table("rho10_probit.txt")
+pveta<- read.table("eta_probit.txt")
+
+# For the no-interaction model True model
+nvrho00<- read.table("rho00.txt")
+nvrho01<- read.table("rho01.txt")
+nvrho10<- read.table("rho10.txt")
+
+# For the complementary log-log model
+
+lgvrho00<- read.table("rho00_loglog.txt")
+lgvrho01<- read.table("rho01_loglog.txt")
+lgvrho10<- read.table("rho10_loglog.txt")
+lgveta<- read.table("eta_loglog.txt")
+
+
+M<-2000
+M1<-2000
+trho00<-0.01
+trho01<-0.6
+trho10<-0.6
+teta<-40
+theta<-0.33333
+
+# This function finds the MTD curve of the logistic model.
+
+mtd_logistic<-function(rho00,rho01,rho10,eta,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma+eta*x)
+a}
+
+# This function finds the MTD curve of the logistic model with no interaction.
+
+working_mtd_logistic<-function(rho00,rho01,rho10,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma)
+a}
+
+
+tmtdx0<-(log(theta/(1-theta)) - log(trho00/(1-trho00))) / (log(trho10/(1-trho10)) - log(trho00/(1-trho00)))
+if (tmtdx0 > 1) 
+{x1<-seq(0,1,by=0.01)} else 
+{
+x1<-seq(0,tmtdx0,by=0.01)}
+
+
+kk<-length(x1)
+ymtd<-numeric()
+for(i in 1:kk){
+ymtd[i]<-mtd_logistic(trho00,trho01,trho10,teta,theta,x1[i])}
+
+x1<-x1[ymtd >= 0 & ymtd <= 1]
+ymtd<-ymtd[ymtd >= 0 & ymtd <= 1]
+kk<-length(x1)
+
+# Define the function to be minimized
+
+fdist<-function(x,pt,rho00,rho01,rho10,eta,theta){
+# pt is the point on true MTD curve
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+
+d<-(pt[1]-x)^2+(pt[2]-(log(theta/(1-theta))-alpha-beta*x)/(gamma+eta*x))^2
+d<-d^0.5
+d}
+
+
+ld<-matrix(nrow=M,ncol=kk)
+pd<-matrix(nrow=M1,ncol=kk)
+nd<-matrix(nrow=M,ncol=kk)
+lgd<-matrix(nrow=M1,ncol=kk)
+
+for (i in 1:M){
+for (j in 1 :kk){
+
+aal<-optimize(f=fdist,c(0,1),tol=0.0001,c(x1[j],ymtd[j]),vrho00[i,1],vrho01[i,1],vrho10[i,1],veta[i,1],theta)
+aan<-optimize(f=fdist,c(0,1),tol=0.0001,c(x1[j],ymtd[j]),nvrho00[i,1],nvrho01[i,1],nvrho10[i,1],0,theta)
+ld[i,j]<-aal$objective
+nd[i,j]<-aan$objective
+
+if (ymtd[j] > mtd_logistic(vrho00[i,1],vrho01[i,1],vrho10[i,1],veta[i,1],theta,aal$minimum))
+(ld[i,j] <- -ld[i,j])
+if (ymtd[j] > mtd_logistic(nvrho00[i,1],nvrho01[i,1],nvrho10[i,1],0,theta,aan$minimum))
+(nd[i,j] <- -nd[i,j])
+}}
+
+for (i in 1:M1){
+for (j in 1 :kk){
+
+
+aap<-optimize(f=fdist,c(0,1),tol=0.0001,c(x1[j],ymtd[j]),pvrho00[i,1],pvrho01[i,1],pvrho10[i,1],pveta[i,1],theta)
+
+aalg<-optimize(f=fdist,c(0,1),tol=0.0001,c(x1[j],ymtd[j]),lgvrho00[i,1],lgvrho01[i,1],lgvrho10[i,1],lgveta[i,1],theta)
+
+
+pd[i,j]<-aap$objective
+
+lgd[i,j]<-aalg$objective
+
+if (ymtd[j] > mtd_logistic(pvrho00[i,1],pvrho01[i,1],pvrho10[i,1],pveta[i,1],theta,aap$minimum))
+(pd[i,j] <- -pd[i,j])
+
+
+if (ymtd[j] > mtd_logistic(lgvrho00[i,1],lgvrho01[i,1],lgvrho10[i,1],lgveta[i,1],theta,aalg$minimum))
+(lgd[i,j] <- -lgd[i,j])
+
+}}
+
+
+aveld<-numeric()
+avepd<-numeric()
+avend<-numeric()
+avelgd<-numeric()
+
+for (i in 1 :kk){
+aveld[i]<-mean(ld[,i])
+avend[i]<-mean(nd[,i])
+avepd[i]<-mean(pd[,i])
+avelgd[i]<-mean(lgd[,i])
+}
+
+low<-min(c(aveld,avend,avepd,avelgd))
+upp<-max(c(aveld,avend,avepd,avelgd))
+
+
+plot(x1,aveld,type="l",lty=3, col="green",ylim=c(low,upp),xlab="Dose (Drug A)", ylab="Average Bias",cex.lab=0.9,cex.axis=0.8)
+points(x1,avepd,type="l",lty=5, col="red")
+points(x1,avend,type="l",lty=2, col="blue")
+points(x1,avelgd,type="l",lty=4,col="brown")
+#axis(side=3,at=c(0.0,0.1,0.2,0.3,0.4),cex.axis=0.8)
+points(x1,rep(0,kk),type="l",lty=3)
+legend("bottomright",c("No Int","Logistic","Log-Log","Probit"), bty="n",lty=c(2,3,4,5),col=c("blue","green","brown","red"),cex=0.8)
+
+#par(mfrow=c(2,2),mar=c(0,0,2,0),oma=c(5,5,0,13))
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,280 @@
+###################################################################################################################
+# This program simulates M trials for dose finding of combination of two agents. It uses the logistic model
+# logit(p)=alpha+beta*x+gamma*y + eta*x*y.
+# Dose levels x and y are standardized to be between 0 and 1.
+# The model is reparameterized in terms of rho00 = probability of DLT when x=y=0,
+# rho01 = probability of DLT when when x=0 y=1, rho10 = probability of DLT when x = 1 y = 0, and eta = interaction term between # drugs.
+# Feasibility bound alpha is variable
+# MTD is truncated to interval (-Xmin / (Xmax - Xmin), infinity) where Xmin and Xmax are actual dose levels of both agent A and # agent B.
+# A dose escalation jump is restricted to be no more than delta1 = 20% or 25% of dose range.
+###################################################################################################################
+# This function simulates a binary DLT response.
+resplogistcomb<-function(rho00,rho01,rho10,eta,theta,x,y){
+ alpha<-log(rho00/(1-rho00))
+ beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+ gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+ p<-1/(1+exp(-alpha-beta*x-gamma*y-eta*x*y))
+ u<-runif(1)
+ if (u < p)
+ z<-1
+ else
+ z<-0
+ z}
+
+# This function computes the probability of DLT at dose combination (x,y)
+
+pdlt<-function(rho00,rho01,rho10,eta,theta,x,y){
+alpha<-log(rho00/(1-rho00))
+ beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+ gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+p<-1/(1+exp(-alpha-beta*x-gamma*y-eta*x*y))
+p}
+
+
+
+# This function finds the set of MTD
+twodimmtd2<-function(rho00,rho01,rho10,eta,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma+eta*x)
+a}
+
+# Controls size of jump
+delta1<-0.2
+Xlow<-0
+Ylow<-0
+
+Xmin<-100
+Xmax<-500
+lb<--Xmin/(Xmax - Xmin)
+
+# Threshold for posterior probability of toxicity at minimum dose for stopping trial
+delta<-0.8
+
+# Number of Trials
+M<-2000
+# True parameters-scenario
+trho00<-1e-7
+trho01<-3e-6
+trho10<-3e-6
+teta<-10
+# Target Probability of DLT 
+theta<-0.33333
+# Number of patients in a trial
+NN<-40
+# Feasibility bound
+alpha<-numeric()
+alphaa<-seq(0.25,0.5,by=0.05)
+for (ind in 1:5){
+alpha[ind]<-alphaa[ind]
+}
+for (ind in 6:(NN-1)){
+alpha[ind]<-alphaa[6]
+}
+# Prior hyper-parameters for rho00, rho01, rho10, eta
+a00<-1
+b00<-1
+a01<-1
+b01<-1
+a10<-1
+b10<-1
+# Prior parameters for interaction term eta
+a<-0.8
+b<-0.0384
+vrho00<-numeric()
+veta<-numeric()
+vrho01<-numeric()
+vrho10<-numeric()
+
+# mcmc parameters
+
+chains<-1
+burn<-10000
+mm<-5000
+
+# Declaration of intermediate statistics
+trcmtdx1<-numeric()
+trcmtdx2<-numeric()
+trcmtdy1<-numeric()
+trcmtdy1<-numeric()
+
+# Declaration of the output statistics
+dosex<-mat.or.vec(M,NN)
+dosey<-mat.or.vec(M,NN)
+dlt<-mat.or.vec(M,NN)
+postlow<-mat.or.vec(M,NN/2)
+temp1<-numeric()
+temp2<-numeric()
+
+# Start of main loop for the trials
+
+for (kk in 1:M) {
+
+# data for first cohort of two patients- Z is DLT status
+
+
+X<-c(0,0)
+Y<-c(0,0)
+
+# Simulate responses for patients 1 and 2 from logistic model
+
+zz1<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[1],Y[1])
+zz2<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[2],Y[2])
+Z<-c(zz1,zz2)
+n<-2
+
+# Get dose Y for patient 3 when dose X equals 0 and dose X for patient 4 when dose Y equals 0
+
+j=jags.model('combination_cohort_2.int.txt',data=list('Z'=Z,'X'=X,'Y'=Y,'theta'=theta,'a00'=a00,'b00'=b00,'a01'=a01,'b01'=b01,'a10'=a10,'b10'=b10,'a'=a,'b'=b,'N'=n),n.chains=chains,n.adapt=burn)
+
+s=coda.samples(j,c('rho00','rho01','rho10','eta','mtdx1','mtdy1','mtdx2','mtdy2'),mm)
+ss=as.data.frame(s[[1]])
+
+trcmtdx1<-ss$mtdx1[ss$mtdx1 > lb]
+xx1<-max(0,quantile(trcmtdx1,alpha[1]))
+xx1<-min(xx1,1)
+if ((xx1 - X[1]) > delta1)
+xx1<-X[1]+delta1
+
+
+trcmtdy2<-ss$mtdy2[ss$mtdy2 > lb]
+yy2<-max(0,quantile(trcmtdy2,alpha[1]))
+yy2<-min(yy2,1)
+if ((yy2 - Y[2]) > delta1)
+yy2<-Y[2]+delta1
+
+# Update data
+
+X<-c(X,0,xx1)
+Y<-c(Y,yy2,0)
+
+# Simulate responses for patients 3 and 4 from logistic model
+
+zz1<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[3],Y[3])
+zz2<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[4],Y[4])
+Z<-c(Z,zz1,zz2)
+n<-4
+
+for (i in 3:(NN/2)) {
+j=jags.model('combination_cohort_2.int.txt',data=list('Z'=Z,'X'=X,'Y'=Y,'theta'=theta,'a00'=a00,'b00'=b00,'a01'=a01,'b01'=b01,'a10'=a10,'b10'=b10,'a'=a,'b'=b,'N'=n),n.chains=chains,n.adapt=burn)
+
+s=coda.samples(j,c('rho00','rho01','rho10','eta','mtdx1','mtdy1','mtdx2','mtdy2'),mm)
+ss=as.data.frame(s[[1]])
+
+# Calculating posterior probability of toxicity
+for (ll in 1:mm) {
+
+temp1[ll]<-pdlt(ss$rho00[ll],ss$rho01[ll],ss$rho10[ll],ss$eta[ll],theta, Xlow, Ylow)
+
+if (temp1[ll] > theta+0.05)
+(temp2[ll]<-1) else
+(temp2[ll]<-0)
+}
+postlow[kk,i]<-sum(temp2)/mm
+
+
+trcmtdx1<-ss$mtdx1[ss$mtdx1 > lb]
+xx1<-max(0,quantile(trcmtdx1,alpha[i-1]))
+xx1<-min(xx1,1)
+if ((xx1 - X[2*i-3]) > delta1)
+xx1<-X[2*i-3]+delta1
+
+trcmtdx2<-ss$mtdx2[ss$mtdx2 > lb]
+xx2<-max(0,quantile(trcmtdx2,alpha[i-1]))
+xx2<-min(xx2,1)
+if ((xx2 - X[2*i-2]) > delta1)
+xx2<-X[2*i-2]+delta1
+
+trcmtdy1<-ss$mtdy1[ss$mtdy1 > lb]
+yy1<-max(0,quantile(trcmtdy1,alpha[i-1]))
+yy1<-min(yy1,1)
+if ((yy1 - Y[2*i-3]) > delta1)
+yy1<-Y[2*i-3]+delta1
+
+trcmtdy2<-ss$mtdy2[ss$mtdy2 > lb]
+yy2<-max(0,quantile(trcmtdy2,alpha[i-1]))
+yy2<-min(yy2,1)
+if ((yy2 - Y[2*i-2]) > delta1)
+yy2<-Y[2*i-2]+delta1
+
+
+if (X[2*i-3] == X[2*i-5]) {
+
+X<-c(X,xx1,X[2*i-2])
+Y<-c(Y,Y[2*i-3],yy2)} else {
+X<-c(X,X[2*i-3],xx2)
+Y<-c(Y,yy1,Y[2*i-2])}
+
+
+n<-n+2
+zz1<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[2*i-1],Y[2*i-1])
+zz2<-resplogistcomb(trho00,trho01,trho10,teta,theta,X[2*i-2],Y[2*i-2])
+Z<-c(Z,zz1,zz2)}
+
+dosex[kk,]<-X
+dosey[kk,]<-Y
+dlt[kk,]<-Z
+
+
+vrho00[kk]<-median(ss$rho00)
+vrho01[kk]<-median(ss$rho01)
+vrho10[kk]<-median(ss$rho10)
+veta[kk]<-median(ss$eta)
+
+}
+
+x2<-seq(0,1,by=0.01)
+y2<-numeric()
+
+
+yest<-numeric()
+for (i in 1:101){
+y2[i]<-twodimmtd2(trho00,trho01,trho10,teta,theta,x2[i])
+yest[i]<-twodimmtd2(mean(vrho00),mean(vrho01),mean(vrho10),mean(veta),theta,x2[i])
+
+}
+x3<-seq(0.02,1,by=0.01)
+y3<-rep(0,99)
+# Graphing the True and Estimated MTD
+xnodlt<-dosex[M,][dlt[M,]==0]
+ynodlt<-dosey[M,][dlt[M,]==0]
+xdlt<-dosex[M,][dlt[M,]==1]
+ydlt<-dosey[M,][dlt[M,]==1]
+
+#par(mfrow=c(1,1),pty="s")
+plot(x2,y2,type="l",ylim=c(0,1),xlab=" x dose", ylab="y dose")
+points(x3,y3,type="l",lty=3,xlab="",ylab="")
+
+points(xnodlt,ynodlt,xlab="",ylab="")
+points(xdlt,ydlt,pch=18,col="red",xlab="",ylab="")
+points(x2,yest,type="l",lty=2,col="blue",xlab="",ylab="")
+legend("bottomright",c("True MTD","Estimated MTD"),lty=1:2,col=c("black","blue"),cex=0.7)
+test1<-data.frame(Parameters=c(NA,NA,NA,NA),True_Value=c(trho00,teta,trho01,trho10), Post_Mean=c(round(mean(vrho00),digits=2),round(mean(veta),digits=2),round(mean(vrho01),digits=2),round(mean(vrho10),digits=2)))
+rownames(test1)<-c("1","2","3","4")
+
+addtable2plot(0.41,0.6,test1,display.rownames=FALSE,bty="o",hlines=TRUE)
+text(0.55,0.76,expression(paste(rho,"00")))
+text(0.55,0.71,expression(eta))
+text(0.55,0.67,expression(paste(rho,"01")))
+text(0.55,0.63,expression(paste(rho,"10")))
+text(0.65,0.58,paste("theta = ", round(theta,digits=2), "Percent DLT =",round(mean(dlt),digits=2)))
+
+#text(0.38,1,paste("M =",M,"Simulated Trials with N =",NN,",","eta~gamma(",a,",",b,")"))
+#text(0.38,0.92, "Dots are doses from the last trial, red indicates DLT")
+
+tempost<-numeric()
+
+for (i in 1 :M) {
+
+tempost[i]<-max(postlow[i,]) }
+
+pstop<-length(tempost[tempost > delta]) / M
+
+write.table(dosex,"dosex.txt")
+write.table(dosey,"dosey.txt")
+write.table(dlt,"dlt.txt")
+write.table(vrho00,"rho00.txt")
+write.table(vrho01,"rho01.txt")
+write.table(vrho10,"rho10.txt")
+Write.table(veta,"eta.txt")

@@ -1,0 +1,135 @@
+# This program plots the true and estimated MTD of EWOC using drug combinations along with the last trial doses.
+tiff(file="Figure1.tiff",width=1600,height=1600,units="px",res=300)
+
+# This function finds the MTD curve from logistic model
+
+mtd_logistic<-function(rho00,rho01,rho10,eta,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma+eta*x)
+a}
+
+# This function finds the MTD curve from working model
+
+working_mtd_logistic<-function(rho00,rho01,rho10,theta,x){
+alpha<-log(rho00/(1-rho00))
+beta<-log(rho10/(1-rho10)) - log(rho00/(1-rho00))
+gamma<-log(rho01/(1-rho01)) - log(rho00/(1-rho00))
+a<-(log(theta/(1-theta))-alpha-beta*x)/(gamma)
+a}
+
+
+########################################################################
+# import the mcmc estimates of the three model parameters-new model
+########################################################################
+vrho00new<- read.table("rho00.txt")
+vrho01new<- read.table("rho01.txt")
+vrho10new<- read.table("rho10.txt")
+dltnew<- read.table("dlt.txt")
+#########################################################################
+# import the mcmc estimates of the four model parameters-old logistic model
+#########################################################################
+vrho00logist<- read.table("rho00_logist.txt")
+vrho01logist<- read.table("rho01_logist.txt")
+vrho10logist<- read.table("rho10_logist.txt")
+vetalogist<- read.table("eta_logist.txt")
+dltlogist<- read.table("dlt_logist.txt")
+
+#########################################################################
+# import the mcmc estimates of the four model parameters-old loglog model
+#########################################################################
+vrho00loglog<- read.table("rho00_loglog.txt")
+vrho01loglog<- read.table("rho01_loglog.txt")
+vrho10loglog<- read.table("rho10_loglog.txt")
+vetaloglog<- read.table("eta_loglog.txt")
+dltloglog<- read.table("dlt_loglog.txt")
+
+#########################################################################
+# import the mcmc estimates of the four model parameters-old probit model
+#########################################################################
+vrho00probit<- read.table("rho00_probit.txt")
+vrho01probit<- read.table("rho01_probit.txt")
+vrho10probit<- read.table("rho10_probit.txt")
+vetaprobit<- read.table("eta_probit.txt")
+dltprobit<- read.table("dlt_probit.txt")
+
+M<-2000
+
+trho00<-0.01
+trho01<-0.6
+trho10<-0.6
+teta<-40
+theta<-0.33333
+NN<-40
+
+tmtdx0<-(log(theta/(1-theta)) - log(trho00/(1-trho00))) / (log(trho10/(1-trho10)) - log(trho00/(1-trho00)))
+
+xtemp1<-seq(0,1,by=0.01)
+xtemp2<-seq(0,1,by=0.01)
+xtemp3<-seq(0,1,by=0.01)
+xtemp4<-seq(0,1,by=0.01)
+xtemp5<-seq(0,1,by=0.01)
+
+if (tmtdx0 > 1) 
+{x2<-seq(0,1,by=0.01)} else 
+{
+x2<-seq(0,tmtdx0,by=0.01)}
+
+ll<-length(x2)
+y2<-numeric()
+yestnew<-numeric()
+yestlogist<-numeric()
+yestloglog<-numeric()
+yestprobit<-numeric()
+for (i in 1:ll){
+y2[i]<-mtd_logistic(trho00,trho01,trho10,teta,theta,x2[i])}
+for (i in 1:101){
+yestnew[i]<-working_mtd_logistic(median(vrho00new[1:M,]),median(vrho01new[1:M,]),median(vrho10new[1:M,]),theta,xtemp1[i])
+yestlogist[i]<-mtd_logistic(median(vrho00logist[1:M,]),median(vrho01logist[1:M,]),median(vrho10logist[1:M,]),median(vetalogist[1:M,]),theta,xtemp1[i])
+yestloglog[i]<-mtd_logistic(median(vrho00loglog[1:M,]),median(vrho01loglog[1:M,]),median(vrho10loglog[1:M,]),median(vetaloglog[1:M,]),theta,xtemp1[i])
+yestprobit[i]<-mtd_logistic(median(vrho00probit[1:M,]),median(vrho01probit[1:M,]),median(vrho10probit[1:M,]),median(vetaprobit[1:M,]),theta,xtemp1[i])
+}
+
+# coordinates of true MTD curve
+xtemp2<-xtemp2[y2 >= 0 & y2 <= 1]
+y2<-y2[y2 >= 0 & y2 <= 1]
+
+# coordinates of estimated MTD curve from new model
+xtemp1<-xtemp1[yestnew >= 0 & yestnew <= 1]
+yestnew<-yestnew[yestnew >= 0 & yestnew <= 1]
+
+# coordinates of estimated MTD curve from logistic model
+xtemp3<-xtemp3[yestlogist >= 0 & yestlogist <= 1]
+yestlogist<-yestlogist[yestlogist >= 0 & yestlogist <= 1]
+
+# coordinates of estimated MTD curve from loglog model
+xtemp4<-xtemp4[yestloglog >= 0 & yestloglog <= 1]
+yestloglog<-yestloglog[yestloglog >= 0 & yestloglog <= 1]
+
+# coordinates of estimated MTD curve from probit model
+xtemp5<-xtemp5[yestprobit >= 0 & yestprobit <= 1]
+yestprobit<-yestprobit[yestprobit >= 0 & yestprobit <= 1]
+
+
+par(pty="s")
+
+plot(x2,y2,type="l",xlim=c(0,1),ylim=c(0,1),xlab="Dose (Agent A)", ylab="Dose (Agent B)",cex.lab=0.8,cex.axis=0.8)
+points(xtemp1,yestnew,type="l",lty=2,col="blue",xlab="",ylab="")
+points(xtemp3,yestlogist,type="l",col="green",lty=3,xlab="",ylab="")
+points(xtemp4,yestloglog,type="l",col="brown",lty=4,xlab="",ylab="")
+points(xtemp5,yestprobit,type="l",col="red",lty=5,xlab="",ylab="")
+
+#points(xtemp2,y2,type="l",xlab="",ylab="")
+#points(xtemp2,y2,type="l",xlim=c(0,1),ylim=c(0,1),xlab="Dose (Agent A)", ylab="Dose (Agent B)",cex.lab=0.8,cex.axis=0.8)
+
+legend("topright",c("True MTD","Est MTD-No Int","Est MTD-logist","Est MTD-loglog","Est MTD-probit"),bty="n",lty=c(1,2,3,4,5),col=c("black","blue","green","brown","red"),cex=0.8)
+
+
+
+
+
+
+
+
+
